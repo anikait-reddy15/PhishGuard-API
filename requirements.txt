@@ -1,0 +1,4 @@
+google-adk
+flask
+gunicorn
+python-dotenv
