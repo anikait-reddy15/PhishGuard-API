@@ -2,7 +2,10 @@ import os
 import json
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+
 from google.adk.agents import Agent 
+from google.adk.runners import InMemoryRunner
+from google.genai import types
 
 # Load environment variables from your .env file
 load_dotenv()
@@ -25,10 +28,9 @@ agent = Agent(
     instruction=SYSTEM_PROMPT
 )
 
-# 3. Define the Web Endpoint
+# 4. Define the Web Endpoint
 @app.route('/analyze', methods=['POST'])
 def analyze_text():
-    # Ensure the incoming request contains JSON data
     data = request.get_json()
     if not data or 'message' not in data:
         return jsonify({"error": "Invalid request. Please provide a JSON payload with a 'message' key."}), 400
@@ -36,21 +38,36 @@ def analyze_text():
     user_message = data['message']
     
     try:
-        # Pass the message to the AI agent
-        ai_response = agent.run(user_message)
+        # Create a fresh, temporary runner strictly for this single HTTP request
+        # This bypasses session errors and prevents memory leaks between API calls
+        local_runner = InMemoryRunner(agent=agent)
         
-        # Clean the response to ensure it is strict JSON (removing potential ```json tags)
-        clean_text = ai_response.text.strip().strip('```json').strip('```')
+        final_text = ""
+        
+        # Pass the plain text directly without hardcoding user or session IDs. 
+        # The runner will automatically handle the default state creation.
+        for event in local_runner.run(new_message=user_message):
+            if event.is_final_response():
+                # Extract the text safely
+                if hasattr(event, 'content') and event.content and event.content.parts:
+                    final_text = event.content.parts[0].text
+                elif hasattr(event, 'text'):  # Fallback for different ADK versions
+                    final_text = event.text
+        
+        # Clean the response to ensure it is strict JSON
+        clean_text = final_text.strip().strip('```json').strip('```')
         result_dict = json.loads(clean_text)
         
-        # Send the analysis back to the user
         return jsonify(result_dict), 200
 
     except Exception as e:
         return jsonify({"error": f"Failed to process the message: {str(e)}"}), 500
 
-# 4. Run the Server
+# 5. Health Check Route
+@app.route('/', methods=['GET'])
+def health_check():
+    return "PhishGuard API is running! Send POST requests to /analyze"
+
 if __name__ == '__main__':
-    # Cloud Run requires binding to 0.0.0.0 and defaults to port 8080
     port = int(os.environ.get('PORT', 8080))
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=port)
