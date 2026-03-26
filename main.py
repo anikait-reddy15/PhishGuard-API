@@ -69,8 +69,144 @@ def analyze_text():
 
     except Exception as e:
         return jsonify({"error": f"Failed to process the message: {str(e)}"}), 500
+    
+# 4. Web Interface Route (Dark Mode + Pretty Formatting)
+@app.route('/', methods=['GET'])
+def index():
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PhishGuard | Dark Edition</title>
+        <style>
+            body { 
+                font-family: 'Inter', -apple-system, sans-serif; 
+                max-width: 700px; 
+                margin: 0 auto; 
+                padding: 40px 20px; 
+                background-color: #0d1117; 
+                color: #c9d1d9; 
+            }
+            .container {
+                background-color: #161b22;
+                padding: 30px;
+                border-radius: 12px;
+                border: 1px solid #30363d;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            }
+            h2 { color: #58a6ff; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+            p { color: #8b949e; }
+            textarea { 
+                width: 100%; 
+                height: 150px; 
+                margin-top: 15px;
+                padding: 15px; 
+                background-color: #0d1117;
+                color: #e6edf3;
+                border: 1px solid #30363d; 
+                border-radius: 8px; 
+                font-family: inherit;
+                resize: vertical;
+                box-sizing: border-box;
+            }
+            textarea:focus { outline: none; border-color: #58a6ff; }
+            .controls { margin-top: 20px; display: flex; justify-content: flex-end; }
+            button { 
+                padding: 12px 28px; 
+                background-color: #238636; 
+                color: white; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer; 
+                font-weight: 600;
+                transition: background 0.2s;
+            }
+            button:hover { background-color: #2ea043; }
+            
+            #resultWrapper { 
+                margin-top: 30px; 
+                display: none; /* Hidden until first scan */
+                padding: 20px;
+                border-radius: 8px;
+                background-color: #21262d;
+            }
+            .label { font-size: 0.8rem; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; }
+            .value { font-size: 1.1rem; margin: 5px 0 15px 0; font-weight: 500; }
+            
+            /* Threat Level Colors */
+            .level-high { color: #ff7b72; font-weight: bold; }
+            .level-medium { color: #d29922; font-weight: bold; }
+            .level-low { color: #3fb950; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>🛡️ PhishGuard API</h2>
+            <p>Paste the content of a suspicious email or message below to evaluate security risks in real-time.</p>
+            
+            <textarea id="messageInput" placeholder="Enter message text here..."></textarea>
+            
+            <div class="controls">
+                <button id="scanBtn" onclick="analyzeMessage()">Scan for Threats</button>
+            </div>
 
-# 4. Health Check Route
+            <div id="resultWrapper">
+                <div class="label">Threat Level Assessment</div>
+                <div id="riskLevel" class="value">--</div>
+                
+                <div class="label">AI Security Summary</div>
+                <div id="summaryText" class="value" style="color: #e6edf3;">--</div>
+            </div>
+        </div>
+
+        <script>
+            async function analyzeMessage() {
+                const message = document.getElementById('messageInput').value;
+                const scanBtn = document.getElementById('scanBtn');
+                const resultWrapper = document.getElementById('resultWrapper');
+                
+                if(!message.trim()) return alert("Please enter a message first.");
+
+                // UI Feedback
+                scanBtn.innerText = "Analyzing...";
+                scanBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+                    const data = await response.json();
+                    
+                    // Show results area
+                    resultWrapper.style.display = "block";
+                    
+                    // Update Risk Level with Dynamic Color
+                    const riskEl = document.getElementById('riskLevel');
+                    const level = data.Threat_Level || "Unknown";
+                    riskEl.innerText = level;
+                    riskEl.className = "value level-" + level.toLowerCase();
+                    
+                    // Update Summary
+                    document.getElementById('summaryText').innerText = data.Red_Flag_Summary || "No summary available.";
+
+                } catch (error) {
+                    alert("Analysis failed. The model might be busy. Try again in a few seconds.");
+                } finally {
+                    scanBtn.innerText = "Scan for Threats";
+                    scanBtn.disabled = false;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return html_content
+
+# 5. Health Check Route
 @app.route('/', methods=['GET'])
 def health_check():
     return "PhishGuard API is running! Send POST requests to /analyze"
